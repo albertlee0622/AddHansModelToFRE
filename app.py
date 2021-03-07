@@ -658,6 +658,7 @@ def sim_server_down():
 @app.route('/sim_auto_trading')
 @login_required
 def sim_auto_trading():
+    client_config.server_ready = True ###
     if client_config.server_ready:
         if not client_config.client_thread_started:
             client_config.client_thread_started = True
