@@ -1,20 +1,26 @@
+import os
 import sys
+import csv
 import time
+import numpy as np
+import pandas as pd
 import random
 import json
-import numpy as np
-from system.utility.config import ClientConfig, ServerConfig
-from system.utility.helpers import usd
+from system.utility.config import ClientConfig
 from system.sim_trading.network import PacketTypes, Packet
-from typing import Dict
+from system.market_data.fre_market_data import EODMarketData
+from system.database.fre_database import FREDatabase
 from queue import Queue
-import datetime
-import pandas_market_calendars as mcal
+from system.utility.helpers import usd
+from system.sim_trading import sim_demo_model as sdm
 
 sys.path.append('../')
 
 client_config = ClientConfig()
-#server_config = ServerConfig()
+
+database = FREDatabase()
+eod_market_data = EODMarketData(os.environ.get("EOD_API_KEY"), None) #to only use get_intraday_data() 
+
 
 def client_receive(q=None, e=None):
     total_server_response = b''
@@ -33,7 +39,7 @@ def client_receive(q=None, e=None):
                     total_server_response = total_server_response[server_packet.m_data_size:]
                     msgSize = len(total_server_response)
                     if server_packet.m_type == PacketTypes.END_RSP.value or \
-                            server_packet.m_type == PacketTypes.SERVER_DOWN_RSP.value:
+                        server_packet.m_type == PacketTypes.SERVER_DOWN_RSP.value:
                         client_config.receiver_stop = True
                 else:
                     server_response = client_config.client_socket.recv(client_config.BUF_SIZE)
@@ -125,32 +131,6 @@ def wait_for_an_event(e):
         continue
 
 
-# Stock Info class based on Bollinger Bands Trading Strategy
-class BollingerBandsStocksInfo:
-    def __init__(self, ticker, h=20, k1=2, notional=100000 / len(client_config.client_symbols),
-                 price_queue=Queue(int(20 / 5))):
-        self.Ticker = ticker
-        self.H = h
-        self.K1 = k1
-        self.Notional = notional
-        self.price_queue = price_queue
-        self.Std = "null"
-        self.MA = "null"
-        self.position = 0
-        self.Qty = 0
-        self.current_price_buy = 0
-        self.current_price_sell = 1e6
-        self.Tradelist = []
-        self.PnLlist = []
-        self.PnL = 0
-
-
-# Initialize A Stock Info Dictionary
-def bollingerbands_stkinfo_init() -> Dict[str, BollingerBandsStocksInfo]:
-    stock_info_dict = {stk: BollingerBandsStocksInfo(stk) for stk in client_config.client_symbols}
-    return stock_info_dict
-
-
 def join_trading_network(q, e):
     try:
         client_packet = Packet()
@@ -168,23 +148,34 @@ def join_trading_network(q, e):
         send_msg(get_stock_list(client_packet))
         wait_for_an_event(e)
         stock_data = get_response(q)
-
-        stock_data['Stock List'] = client_config.client_symbols
-
+        market_stock_list = stock_data['Stock List'].split(',')
+        print(market_stock_list)
+        
+        client_packet = Packet()
+        set_event(e)
+        send_msg(get_market_status(client_packet))
+        wait_for_an_event(e)
+        
+        mkstatus = get_response(q)
+        market_end_date = mkstatus['Market_End_Date']
+        current_date = mkstatus['Market_Period']
+        print(market_end_date)
+        selected_stocks, _ = sdm.BBDmodelStockSelector.select_highvol_stock(pd.to_datetime(current_date), market_stock_list)
         # initialize StkInfo Dict
-        StockInfoDict = bollingerbands_stkinfo_init()
+        StockInfoDict = sdm.BBDmodelStockSelector.bollingerbands_stkinfo_init(selected_stocks)
+        print(StockInfoDict)
         base_filled_orderid = []
 
         # Get market period same as server side
-        end_date = datetime.datetime.today()
+        # end_date = datetime.datetime.today()
 
-        # end_date = datetime.datetime.today() - datetime.timedelta(days = 1) # yesterday
-        start_date = end_date + datetime.timedelta(-29)
-
-        trading_calendar = mcal.get_calendar('NYSE')
-        market_periods = trading_calendar.schedule(
-            start_date=start_date.strftime("%Y-%m-%d"),
-            end_date=end_date.strftime("%Y-%m-%d")).index.strftime("%Y-%m-%d").tolist()[:-1]
+        # # end_date = datetime.datetime.today() - datetime.timedelta(days = 1) # yesterday
+        # start_date = end_date + datetime.timedelta(-29)
+        
+        # trading_calendar = mcal.get_calendar('NYSE')
+        # market_periods = trading_calendar.schedule(
+        #     start_date=start_date.strftime("%Y-%m-%d"),
+        #     end_date=end_date.strftime("%Y-%m-%d")).index.strftime("%Y-%m-%d").tolist()[:-1]
         OrderIndex = 0
         # outer loop
         while True:
@@ -205,20 +196,30 @@ def join_trading_network(q, e):
                 # wait till mkt open
                 if mkt_status["Status"] == 'Open' or mkt_status["Status"] == 'Pending Closing':
                     break
-                if mkt_status['Market_Period'] == market_periods[-1] and mkt_status["Status"] == "Market Closed":
+                if mkt_status['Market_Period'] == market_end_date and mkt_status["Status"] == "Market Closed":
+                    print(market_end_date)          
+                    print(client_config.orders)
                     # PnL Calculation Logic At last day
+                    print('PnL Calculation Logic')
                     PnL_dict = {}
                     for stk in StockInfoDict:
                         stkbuy_order = [order for order in client_config.orders if
                                         (order['Symbol'] == stk) & (order['Side'] == 'Buy')]
+                        print(stkbuy_order)
                         stkbuy_price = [order['Price'] for order in stkbuy_order]
+                        print(stkbuy_price)
                         stkbuy_qty = [int(order['Qty']) for order in stkbuy_order]
+                        print(stkbuy_qty)
                         stksell_order = [order for order in client_config.orders if
                                          (order['Symbol'] == stk) & (order['Side'] == 'Sell')]
+                        print(stksell_order)
                         stksell_price = [order['Price'] for order in stksell_order]
+                        print(stksell_price)
                         stksell_qty = [int(order['Qty']) for order in stksell_order]
+                        print(stksell_qty)
                         stkPnL = sum([P * Q for P, Q in zip(stksell_price, stksell_qty)]) - sum(
                             [P * Q for P, Q in zip(stkbuy_price, stkbuy_qty)])
+                        print(stkPnL)
                         PnL_dict.update({stk: stkPnL})
 
                     client_config.PnL = sum(PnL_dict.values())
@@ -279,7 +280,7 @@ def join_trading_network(q, e):
             # BBD Trading Logic
             client_packet = Packet()
             set_event(e)
-            client_msg = get_order_book(client_packet, client_config.client_symbols)
+            client_msg = get_order_book(client_packet, ','.join(selected_stocks))
             send_msg(client_msg)
             wait_for_an_event(e)
 
@@ -302,13 +303,17 @@ def join_trading_network(q, e):
 
 
             filled_order_book = [fill_orders for fill_orders in order_book if fill_orders['Status'] in ['Filled']]
+            print(filled_order_book)
             filled_orderid = [order['OrderIndex'] for order in filled_order_book]
+            print(filled_orderid)
             standing_order_book = [standing_orders for standing_orders in order_book if
                                    standing_orders['Status'] in ['New', 'Partial Filled']]
+
             #        print(filled_order_book, file = sample)
             #        print(standing_order_book, file = sample)
 
-            print('test3')
+            # print('test3')
+            print(StockInfoDict)
             for stk in StockInfoDict:
                 print(stk)
                 standing_buy_price_list = [order['Price'] for order in standing_order_book if
@@ -317,7 +322,7 @@ def join_trading_network(q, e):
                                             (order['Symbol'] == stk) & (order['Side'] == 'Sell')]
                 StockInfoDict[stk].current_price_sell = min(standing_sell_price_list)
                 StockInfoDict[stk].current_price_buy = max(standing_buy_price_list)
-            print('test2')
+            # print('test2')
             # store current price in price queue and use it to calculate MA and std
             for stk in StockInfoDict:
                 stkInfo_object = StockInfoDict[stk]
@@ -336,9 +341,9 @@ def join_trading_network(q, e):
                         filled_qty_list = [int(order['OrigQty']) for order in newly_filled_order]
                         current_price = sum([P * Q for P, Q in zip(filled_price_list, filled_qty_list)]) / sum(
                             filled_qty_list)
-                        print('test1')
+                        # print('test1')
                     except:  # when no newly filled
-                        print('test')
+                        # print('test')
                         current_price = (stkInfo_object.current_price_buy + stkInfo_object.current_price_sell) / 2
                 #            print("current price for", stk, "P= " current_price)
                 if not stkInfo_object.price_queue.full():
@@ -463,51 +468,6 @@ def join_trading_network(q, e):
                         stkInfo_object.position = 0
 
             time.sleep(1)  # request order book every sec
-        # while True:
-        #     client_packet = Packet()
-        #     set_event(e)
-        #     send_msg(get_market_status(client_packet))
-        #     wait_for_an_event(e)
-        #     market_status_data = get_response(q)
-        #     market_status = market_status_data["Status"]
-        #     if (market_status != "Market Closed") and (market_status != "Not Open") and (
-        #             market_status != "Pending Open"):
-        #         break
-        #     time.sleep(1)
-        #
-        # client_packet = Packet()
-        # set_event(e)
-        # client_msg = get_order_book(client_packet, stock_data['Stock List'])
-        # send_msg(client_msg)
-        # wait_for_an_event(e)
-        # data = get_response(q)
-        # book_data = json.loads(data)
-        # order_book = book_data["data"]
-        #
-        # order_index = 0
-        # for order in order_book:
-        #     print("order:", order)
-        #     client_packet = Packet()
-        #     order_index += 1
-        #     client_order_id = client_config.client_id + '_' + str(order_index)
-        #     if order['Qty'] == 0:
-        #         continue
-        #
-        #     enter_a_new_order(client_packet, client_order_id, order['Symbol'],
-        #                       'Lmt' if random.randint(1, 100) % 2 == 0 else 'Mkt',
-        #                       'Buy' if order['Side'] == 'Sell' else 'Sell', float(order['Price']), int(order['Qty']))
-        #
-        #     set_event(e)
-        #     send_msg(client_packet)
-        #     wait_for_an_event(e)
-        #     client_config.orders.append(get_response(q))
-        #     while not q.empty():
-        #         client_config.orders.append(get_response(q))
-        #
-        # while not q.empty():
-        #     client_config.orders.append(get_response(q))
-        #
-        # client_config.trade_complete = True
 
     except(OSError, Exception):
         q.put(PacketTypes.CONNECTION_NONE.value, Exception('join_trading_network'))

@@ -57,7 +57,7 @@ class ServerConfig:
         self.intraday_order_map = {}
         self.market_periods = []
         self.market_period_seconds = []
-        self.total_market_days = 29
+        self.total_market_days = 29 #4
         self.market_status = "Not Open"
         self.server_output = "server_output.txt"
         self.order_index = 0
