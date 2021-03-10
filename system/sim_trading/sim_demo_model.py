@@ -19,7 +19,7 @@ eod_market_data = EODMarketData(os.environ.get("EOD_API_KEY"), database)
 
 # Stock Info class based on Bollinger Bands Trading Strategy
 class BollingerBandsStocksInfo:
-    def __init__(self, ticker, h=20, k1=2, notional=0,
+    def __init__(self, ticker, h=20, k1=2, notional=10000,
                  price_queue=Queue(int(20 / 5))):
         self.Ticker = ticker
         self.H = h

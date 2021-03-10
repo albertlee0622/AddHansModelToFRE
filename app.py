@@ -892,7 +892,7 @@ def sim_auto_trading():
             client_config.trade_complete = False
             client_config.client_socket.close()
 
-        return render_template("sim_auto_trading.html", trading_results=client_config.orders)
+        return render_template("sim_auto_trading.html", trading_results=client_config.orders, pnl_results=client_config.Ticker_PnL)
 
     else:
         return render_template("error_auto_trading.html")

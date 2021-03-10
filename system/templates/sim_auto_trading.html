@@ -49,5 +49,25 @@
         </table>
     </div>
 	<hr>
+    <h3><strong>Auto Trading PnL Analysis</strong></h3>
+    <div  class="table-responsive">
+        <table class="table table-striped">
+        <thead>
+            <tr>
+                <th style="text-align:center">Symbol</th>
+                <th style="text-align:center">ProfitLoss</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for key, value in pnl_results.items() %}
+                <tr>
+                    <th style="text-align:center">{{ key }}</th>
+                    <td style="text-align:center">{{ value }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+	<hr>
 </main>
 {% endblock %}

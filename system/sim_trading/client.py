@@ -197,8 +197,8 @@ def join_trading_network(q, e):
                 if mkt_status["Status"] == 'Open' or mkt_status["Status"] == 'Pending Closing':
                     break
                 if mkt_status['Market_Period'] == market_end_date and mkt_status["Status"] == "Market Closed":
-                    print(market_end_date)          
-                    print(client_config.orders)
+                    # print(market_end_date)
+                    # print(client_config.orders)
                     # PnL Calculation Logic At last day
                     print('PnL Calculation Logic')
                     PnL_dict = {}
@@ -285,27 +285,24 @@ def join_trading_network(q, e):
             wait_for_an_event(e)
 
 
-            data = get_response(q)
+            # when not empty or bad message
+            while True:
+                data = get_response(q)
+                if type(data) == dict:
+                    if data['Status'] != 'Done':
+                        client_config.orders.append(data)
+                else:
+                    break
+
             book_data = json.loads(data)
             order_book = book_data["data"]
-            # # when not empty
-            # while True:
-            #     data = get_response(q)
-            #     if type(data) == dict:
-            #         if data['Status'] != 'Done':
-            #             client_config.orders.append(data)
-            #     else:
-            #         break
-            #
-            # book_data = json.loads(data)
-            # order_book = book_data["data"]
 
 
 
             filled_order_book = [fill_orders for fill_orders in order_book if fill_orders['Status'] in ['Filled']]
-            print(filled_order_book)
+            # print(filled_order_book)
             filled_orderid = [order['OrderIndex'] for order in filled_order_book]
-            print(filled_orderid)
+            # print(filled_orderid)
             standing_order_book = [standing_orders for standing_orders in order_book if
                                    standing_orders['Status'] in ['New', 'Partial Filled']]
 
@@ -313,7 +310,7 @@ def join_trading_network(q, e):
             #        print(standing_order_book, file = sample)
 
             # print('test3')
-            print(StockInfoDict)
+            # print(StockInfoDict)
             for stk in StockInfoDict:
                 print(stk)
                 standing_buy_price_list = [order['Price'] for order in standing_order_book if
