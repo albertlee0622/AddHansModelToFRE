@@ -46,6 +46,7 @@ from system.stat_arb.pair_trading import build_pair_trading_model, pair_trade_ba
     back_testing_start_date, back_testing_end_date
 from system.utility.config import trading_queue, trading_event
 from system.utility.helpers import error_page, login_required, usd, get_python_pid
+from system.sim_trading.sim_demo_model import BBDmodelTrainer
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -848,7 +849,7 @@ def sim_server_down():
 @app.route('/sim_auto_trading')
 @login_required
 def sim_auto_trading():
-    client_config.server_ready = True #TO BE DELETE AFTER TESTING
+    # client_config.server_ready = True #TO BE DELETE AFTER TESTING
     if client_config.server_ready:
         if not client_config.client_thread_started:
             client_config.client_thread_started = True
@@ -896,6 +897,18 @@ def sim_auto_trading():
 
     else:
         return render_template("error_auto_trading.html")
+
+@app.route('/sim_model_info')
+@login_required
+def sim_model_info():
+    return render_template("sim_model_info.html")
+
+@app.route('/train_sim_model')
+@login_required
+def train_sim_model():
+    BBDmodelTrainer.build_trading_model()
+    print(BBDmodelTrainer.stockdf)
+    return render_template("train_sim_model.html")
 
 
 # Market Data

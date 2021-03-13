@@ -29,8 +29,8 @@ from collections import defaultdict
 
 server_config = ServerConfig()
 
-pd.set_option('display.max_rows', 500)
-pd.set_option('display.max_columns', 500)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 
 database = FREDatabase()
@@ -55,13 +55,11 @@ class MarketDates:
         
         cls.start_date = server_config.market_periods[0]
         cls.end_date = server_config.market_periods[-1]
-        print(server_config.market_periods, file=server_config.server_output)
-          # Update for remove non-trading days
+        # print(server_config.market_periods, file=server_config.server_output)
+
         return cls.start_date, cls.end_date, market_period_objects
         
         
-
-
 def populate_intraday_order_map(symbols: Iterable[str], intraday_data_table: str, market_periods: List[str]) -> Dict[
     str, List]:
 

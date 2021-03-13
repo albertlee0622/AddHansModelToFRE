@@ -149,7 +149,7 @@ def join_trading_network(q, e):
         wait_for_an_event(e)
         stock_data = get_response(q)
         market_stock_list = stock_data['Stock List'].split(',')
-        print(market_stock_list)
+        # print(market_stock_list)
         
         client_packet = Packet()
         set_event(e)
@@ -160,10 +160,11 @@ def join_trading_network(q, e):
         market_end_date = mkstatus['Market_End_Date']
         current_date = mkstatus['Market_Period']
         print(market_end_date)
+        
         selected_stocks, _ = sdm.BBDmodelStockSelector.select_highvol_stock(pd.to_datetime(current_date), market_stock_list)
         # initialize StkInfo Dict
         StockInfoDict = sdm.BBDmodelStockSelector.bollingerbands_stkinfo_init(selected_stocks)
-        print(StockInfoDict)
+        # print(StockInfoDict)
         base_filled_orderid = []
 
         # Get market period same as server side
